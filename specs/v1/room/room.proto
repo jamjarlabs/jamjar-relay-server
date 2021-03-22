@@ -1,0 +1,40 @@
+/*
+Copyright 2021 The JamJar Relay Server Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+syntax = "proto3";
+package v1_room;
+
+option go_package = "github.com/jamjarlabs/jamjar-relay-server/specs/v1/room";
+
+message GrantHostRequest {
+    int32 HostID = 1;
+}
+
+message JoinRoomRequest {
+    int32 RoomID = 1;
+	int32 RoomSecret = 2;
+}
+
+message RejoinRoomRequest {
+    int32 RoomID = 1;
+	int32 RoomSecret = 2;
+    int32 ClientID = 3;
+    int32 ClientSecret = 4;
+}
+
+message FinishHostMigrationResponse {
+    int32 HostID = 1;
+}
