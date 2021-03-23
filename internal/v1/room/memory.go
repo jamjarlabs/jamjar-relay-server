@@ -22,7 +22,8 @@ import (
 	"math/rand"
 
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
-	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
+	sessionv1 "github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
+	clientv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 )
 
 func NewRoomMemoryManager(maxClients int32, roomFactory RoomFactory, ceilCommittedToNearest int32) *RoomMemoryManager {
@@ -41,7 +42,7 @@ type RoomMemoryManager struct {
 	CeilCommittedToNearest int32
 }
 
-func (m *RoomMemoryManager) GetRoomWithID(id int32) (Room, error) {
+func (m *RoomMemoryManager) GetRoom(id int32) (Room, error) {
 	room := m.Rooms[id]
 	if room == nil {
 		return nil, ErrNoRoomFound{
@@ -51,7 +52,12 @@ func (m *RoomMemoryManager) GetRoomWithID(id int32) (Room, error) {
 	return m.Rooms[id], nil
 }
 
-func (m *RoomMemoryManager) GetRoomList() ([]Room, error) {
+func (m *RoomMemoryManager) DeleteRoom(id int32) error {
+	delete(m.Rooms, id)
+	return nil
+}
+
+func (m *RoomMemoryManager) ListRooms() ([]Room, error) {
 	list := make([]Room, 0, len(m.Rooms))
 	for _, room := range m.Rooms {
 		list = append(list, room)
@@ -59,7 +65,7 @@ func (m *RoomMemoryManager) GetRoomList() ([]Room, error) {
 	return list, nil
 }
 
-func (m *RoomMemoryManager) GetRoomsSummary() (*RoomsSummary, error) {
+func (m *RoomMemoryManager) Summary() (*RoomsSummary, error) {
 	currentClients := int32(0)
 	committedClients := int32(0)
 	for _, room := range m.Rooms {
@@ -80,7 +86,7 @@ func (m *RoomMemoryManager) GetRoomsSummary() (*RoomsSummary, error) {
 
 func (m *RoomMemoryManager) CreateRoom(maxClients int32) (Room, error) {
 
-	summary, err := m.GetRoomsSummary()
+	summary, err := m.Summary()
 
 	if err != nil {
 		return nil, err
@@ -133,8 +139,9 @@ func NewMemoryRoom(id int32, secret int32, maxClients int32) (*MemoryRoom, error
 		ID:                  id,
 		Secret:              secret,
 		MaxClients:          maxClients,
-		ConnectedClients:    []*session.Session{},
-		DisconnectedClients: []*client.Client{},
+		ConnectedClients:    []*sessionv1.Session{},
+		DisconnectedClients: []*clientv1.Client{},
+		RoomStatus:          RoomStatus_RUNNING,
 	}, nil
 }
 
@@ -143,11 +150,20 @@ type MemoryRoom struct {
 	Secret              int32
 	MaxClients          int32
 	HostID              *int32
-	ConnectedClients    []*session.Session
-	DisconnectedClients []*client.Client
+	ConnectedClients    []*sessionv1.Session
+	DisconnectedClients []*clientv1.Client
+	RoomStatus          RoomStatus
 }
 
-func (r *MemoryRoom) IsHost(potentialHost *client.Client) (bool, error) {
+func (r *MemoryRoom) GetStatus() RoomStatus {
+	return r.RoomStatus
+}
+
+func (r *MemoryRoom) SetStatus(status RoomStatus) {
+	r.RoomStatus = status
+}
+
+func (r *MemoryRoom) IsHost(potentialHost *clientv1.Client) (bool, error) {
 	// Not host if no host assigned, or ID doesn't match host ID
 	return &potentialHost.ID == r.HostID, nil
 }
@@ -165,7 +181,7 @@ func (r *MemoryRoom) GetInfo() (*RoomInfo, error) {
 	}, nil
 }
 
-func (r *MemoryRoom) NewClient(connected *session.Session) (*session.Session, error) {
+func (r *MemoryRoom) NewClient(connected *sessionv1.Session) (*sessionv1.Session, error) {
 	if int32(len(r.ConnectedClients)) >= r.MaxClients {
 		return connected, ErrRoomFull{
 			Message: fmt.Sprintf("Room with ID %d is full", r.ID),
@@ -184,7 +200,7 @@ func (r *MemoryRoom) NewClient(connected *session.Session) (*session.Session, er
 		}
 	}
 
-	connected.Client = &client.Client{
+	connected.Client = &clientv1.Client{
 		ID:     newID,
 		Secret: rand.Int31(),
 	}
@@ -194,7 +210,7 @@ func (r *MemoryRoom) NewClient(connected *session.Session) (*session.Session, er
 	return connected, nil
 }
 
-func (r *MemoryRoom) ExistingClient(connected *session.Session, clientID int32, clientSecret int32) (*session.Session, error) {
+func (r *MemoryRoom) ExistingClient(connected *sessionv1.Session, clientID int32, clientSecret int32) (*sessionv1.Session, error) {
 	if int32(len(r.ConnectedClients)) >= r.MaxClients {
 		return connected, ErrRoomFull{
 			Message: fmt.Sprintf("Room with ID %d is full", r.ID),
@@ -205,7 +221,7 @@ func (r *MemoryRoom) ExistingClient(connected *session.Session, clientID int32, 
 		matchClient := r.DisconnectedClients[i]
 		if clientID == matchClient.ID {
 			if clientSecret == matchClient.Secret {
-				connected.Client = &client.Client{
+				connected.Client = &clientv1.Client{
 					ID:     clientID,
 					Secret: clientSecret,
 				}
@@ -225,12 +241,23 @@ func (r *MemoryRoom) ExistingClient(connected *session.Session, clientID int32, 
 	}
 }
 
+func (r *MemoryRoom) GetClient(clientID int32) (*session.Session, error) {
+	for _, connectedClient := range r.ConnectedClients {
+		if connectedClient.Client.ID == clientID {
+			return connectedClient, nil
+		}
+	}
+
+	return nil, ErrNoMatchingClient{
+		Message: fmt.Sprintf("No connected client found with ID %d", clientID),
+	}
+}
+
 func (r *MemoryRoom) RemoveClient(clientID int32) error {
-	for i := 0; i < len(r.ConnectedClients); i++ {
-		disconnecting := r.ConnectedClients[i]
-		if clientID == disconnecting.Client.ID {
+	for i, connectedClient := range r.ConnectedClients {
+		if clientID == connectedClient.Client.ID {
 			r.ConnectedClients = append(r.ConnectedClients[:i], r.ConnectedClients[i+1:]...)
-			r.DisconnectedClients = append(r.DisconnectedClients, disconnecting.Client)
+			r.DisconnectedClients = append(r.DisconnectedClients, connectedClient.Client)
 			return nil
 		}
 	}
@@ -239,39 +266,41 @@ func (r *MemoryRoom) RemoveClient(clientID int32) error {
 	}
 }
 
-func (r *MemoryRoom) GetConnected() ([]*session.Session, error) {
+func (r *MemoryRoom) GetConnected() ([]*sessionv1.Session, error) {
 	return r.ConnectedClients, nil
 }
 
-func (r *MemoryRoom) SetHost(hostID *int32) (*session.Session, error) {
+func (r *MemoryRoom) SetHost(hostID *int32) (*sessionv1.Session, error) {
 	if hostID == nil {
 		r.HostID = nil
 		return nil, nil
 	}
 
-	for _, connectedClient := range r.ConnectedClients {
-		if connectedClient.Client.ID == *hostID {
-			r.HostID = hostID
-			return connectedClient, nil
-		}
+	host, err := r.GetClient(*hostID)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, ErrNoMatchingClient{
-		Message: fmt.Sprintf("No connected client found with ID %d", hostID),
-	}
+	r.HostID = &host.Client.ID
+
+	return host, nil
 }
 
-func (r *MemoryRoom) GetHost() (*session.Session, error) {
+func (r *MemoryRoom) GetHost() (*sessionv1.Session, error) {
 	if r.HostID == nil {
 		r.HostID = nil
 		return nil, nil
 	}
 
-	for _, connectedClient := range r.ConnectedClients {
-		if connectedClient.Client.ID == *r.HostID {
-			return connectedClient, nil
+	host, err := r.GetClient(*r.HostID)
+	if err != nil {
+		switch err.(type) {
+		case ErrNoMatchingClient:
+			return r.SetHost(nil)
+		default:
+			return nil, err
 		}
 	}
 
-	return r.SetHost(nil)
+	return host, nil
 }

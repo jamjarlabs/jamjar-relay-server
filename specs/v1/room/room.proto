@@ -19,6 +19,10 @@ package v1_room;
 
 option go_package = "github.com/jamjarlabs/jamjar-relay-server/specs/v1/room";
 
+message KickRequest {
+    int32 ClientID = 1;
+}
+
 message GrantHostRequest {
     int32 HostID = 1;
 }
@@ -37,4 +41,8 @@ message RejoinRoomRequest {
 
 message FinishHostMigrationResponse {
     int32 HostID = 1;
+}
+
+message KickResponse {
+    int32 ClientID = 1;
 }

@@ -29,6 +29,7 @@ type WebsocketHandler interface {
 
 type RoomsHandler interface {
 	Get(w http.ResponseWriter, r *http.Request)
+	Delete(w http.ResponseWriter, r *http.Request)
 	Summary(w http.ResponseWriter, r *http.Request)
 	Create(w http.ResponseWriter, r *http.Request)
 	List(w http.ResponseWriter, r *http.Request)
@@ -53,6 +54,7 @@ func (a *API) Routes() {
 				r.Post("/", a.Rooms.Create)
 				r.Route("/{room_id}", func(r chi.Router) {
 					r.Get("/", a.Rooms.Get)
+					r.Delete("/", a.Rooms.Delete)
 				})
 			})
 		})

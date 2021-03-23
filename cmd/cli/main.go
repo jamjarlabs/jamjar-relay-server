@@ -38,6 +38,8 @@ const (
 	actionReconnect   = "r"
 	actionSendMessage = "s"
 	actionListClients = "l"
+	actionKick        = "k"
+	actionGrantHost   = "g"
 )
 
 func main() {
@@ -59,45 +61,60 @@ func main() {
 	go func() {
 		defer close(done)
 		for {
-			_, inputBytes, err := c.ReadMessage()
+			mt, inputBytes, err := c.ReadMessage()
 			if err != nil {
 				log.Fatalf("read: %v", err)
 				return
 			}
 
-			payload := &transport.Payload{}
+			switch mt {
+			case websocket.BinaryMessage:
+				payload := &transport.Payload{}
 
-			proto.Unmarshal(inputBytes, payload)
+				proto.Unmarshal(inputBytes, payload)
 
-			switch payload.Flag {
-			case transport.Payload_RESPONSE_ERROR:
-				networkErr := &transport.Error{}
+				switch payload.Flag {
+				case transport.Payload_RESPONSE_ERROR:
+					networkErr := &transport.Error{}
 
-				proto.Unmarshal(payload.Data, networkErr)
+					proto.Unmarshal(payload.Data, networkErr)
 
-				fmt.Printf("\nCode: %d, Message: %s\n", networkErr.Code, networkErr.Message)
-			case transport.Payload_RESPONSE_CONNECT:
-				clientInfo := &client.Client{}
+					fmt.Printf("\nCode: %d, Message: %s\n", networkErr.Code, networkErr.Message)
+				case transport.Payload_RESPONSE_CONNECT:
+					clientInfo := &client.Client{}
 
-				proto.Unmarshal(payload.Data, clientInfo)
+					proto.Unmarshal(payload.Data, clientInfo)
 
-				fmt.Printf("\nID: %d, Secret: %d\n", clientInfo.ID, clientInfo.Secret)
-			case transport.Payload_RESPONSE_LIST:
-				clientList := &client.ClientList{}
+					fmt.Printf("\nID: %d, Secret: %d\n", clientInfo.ID, clientInfo.Secret)
+				case transport.Payload_RESPONSE_LIST:
+					clientList := &client.ClientList{}
 
-				proto.Unmarshal(payload.Data, clientList)
+					proto.Unmarshal(payload.Data, clientList)
 
-				for i, client := range clientList.List {
-					if client.Host {
-						fmt.Printf("[%d] ID: %d (host)\n", i, client.ID)
-					} else {
-						fmt.Printf("[%d] ID: %d\n", i, client.ID)
+					for i, client := range clientList.List {
+						if client.Host {
+							fmt.Printf("[%d] ID: %d (host)\n", i, client.ID)
+						} else {
+							fmt.Printf("[%d] ID: %d\n", i, client.ID)
+						}
 					}
+				case transport.Payload_RESPONSE_RELAY_MESSAGE:
+					fmt.Printf("\nMessage received: %s\n", string(payload.Data))
+				case transport.Payload_RESPONSE_ASSIGN_HOST:
+					fmt.Println("\nAssigned Host")
+				case transport.Payload_RESPONSE_KICK:
+					kickResponse := &roomspec.KickResponse{}
+
+					proto.Unmarshal(payload.Data, kickResponse)
+					fmt.Printf("\nKicked client with ID %d\n", kickResponse.ClientID)
+				case transport.Payload_RESPONSE_BEGIN_HOST_MIGRATE:
+					fmt.Println("\nHost migration begun")
+				case transport.Payload_RESPONSE_FINISH_HOST_MIGRATE:
+					fmt.Println("\nHost migration finished")
 				}
-			case transport.Payload_RESPONSE_RELAY_MESSAGE:
-				fmt.Printf("\nMessage received: %s\n", string(payload.Data))
-			case transport.Payload_RESPONSE_ASSIGN_HOST:
-				fmt.Println("\nAssigned Host")
+			case websocket.CloseMessage:
+				fmt.Println("Connection closed")
+				return
 			}
 		}
 	}()
@@ -110,6 +127,8 @@ func main() {
 		fmt.Printf("%s - Reconnect\n", actionReconnect)
 		fmt.Printf("%s - Send message\n", actionSendMessage)
 		fmt.Printf("%s - List clients\n", actionListClients)
+		fmt.Printf("%s - Kick client\n", actionKick)
+		fmt.Printf("%s - Grant client host\n", actionGrantHost)
 		fmt.Printf("Action: ")
 		var action string
 		fmt.Scanln(&action)
@@ -273,17 +292,64 @@ func main() {
 			payloadBytes, _ := proto.Marshal(payload)
 
 			c.WriteMessage(websocket.BinaryMessage, payloadBytes)
+		case actionKick:
+			fmt.Printf("ID of client to kick: ")
+			var clientIDStr string
+			fmt.Scanln(&clientIDStr)
+
+			clientID, err := strconv.ParseInt(clientIDStr, 10, 32)
+			if err != nil {
+				fmt.Printf("Invalid client ID, %v", err)
+				break
+			}
+
+			clientID32 := int32(clientID)
+
+			kickRequest := &roomspec.KickRequest{
+				ClientID: clientID32,
+			}
+
+			kickReq, _ := proto.Marshal(kickRequest)
+
+			payload := &transport.Payload{
+				Flag: transport.Payload_REQUEST_KICK,
+				Data: kickReq,
+			}
+
+			payloadByes, _ := proto.Marshal(payload)
+
+			c.WriteMessage(websocket.BinaryMessage, payloadByes)
+		case actionGrantHost:
+			fmt.Printf("ID of client to grant host to: ")
+			var clientIDStr string
+			fmt.Scanln(&clientIDStr)
+
+			clientID, err := strconv.ParseInt(clientIDStr, 10, 32)
+			if err != nil {
+				fmt.Printf("Invalid client ID, %v", err)
+				break
+			}
+
+			clientID32 := int32(clientID)
+
+			grantHostRequest := &roomspec.GrantHostRequest{
+				HostID: clientID32,
+			}
+
+			grantHostReq, _ := proto.Marshal(grantHostRequest)
+
+			payload := &transport.Payload{
+				Flag: transport.Payload_REQUEST_GRANT_HOST,
+				Data: grantHostReq,
+			}
+
+			payloadByes, _ := proto.Marshal(payload)
+
+			c.WriteMessage(websocket.BinaryMessage, payloadByes)
 		default:
 			fmt.Printf("Unknown message type, '%s'", action)
 		}
 		// Wait for 1 sec after to receive any messages
 		time.Sleep(1 * time.Second)
 	}
-
-	// Allow different actions
-
-	// Connect
-	// Disconnect
-	// Reconnect
-	// Send message
 }

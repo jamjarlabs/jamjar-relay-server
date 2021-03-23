@@ -21,54 +21,6 @@ import (
 	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 )
 
-type ErrRequestTooManyClients struct {
-	Message string
-}
-
-func (e ErrRequestTooManyClients) Error() string {
-	return "requested too many clients for room"
-}
-
-type ErrNoRoomFound struct {
-	Message string
-}
-
-func (e ErrNoRoomFound) Error() string {
-	return "no room found"
-}
-
-type ErrNoMatchingClient struct {
-	Message string
-}
-
-func (e ErrNoMatchingClient) Error() string {
-	return "no matching client"
-}
-
-type ErrInvalidSecret struct {
-	Message string
-}
-
-func (e ErrInvalidSecret) Error() string {
-	return "invalid secret"
-}
-
-type ErrRoomFull struct {
-	Message string
-}
-
-func (e ErrRoomFull) Error() string {
-	return "room full"
-}
-
-type ErrMaxClientTooSmall struct {
-	Message string
-}
-
-func (e ErrMaxClientTooSmall) Error() string {
-	return "max clients too small"
-}
-
 type RoomFactory func(id int32, secret int32, maxClients int32) (Room, error)
 
 type Room interface {
@@ -77,6 +29,7 @@ type Room interface {
 	NewClient(session *session.Session) (*session.Session, error)
 	ExistingClient(session *session.Session, clientID int32, clientSecret int32) (*session.Session, error)
 
+	GetClient(clientID int32) (*session.Session, error)
 	RemoveClient(clientID int32) error
 
 	GetConnected() ([]*session.Session, error)
@@ -85,7 +38,17 @@ type Room interface {
 	SetHost(hostID *int32) (*session.Session, error)
 	GetHost() (*session.Session, error)
 	GetInfo() (*RoomInfo, error)
+
+	SetStatus(RoomStatus)
+	GetStatus() RoomStatus
 }
+
+type RoomStatus int32
+
+const (
+	RoomStatus_RUNNING RoomStatus = iota
+	RoomStatus_CLOSING RoomStatus = iota
+)
 
 type RoomInfo struct {
 	ID             int32 `json:"id"`
@@ -102,8 +65,11 @@ type RoomsSummary struct {
 }
 
 type RoomManager interface {
-	GetRoomWithID(id int32) (Room, error)
-	GetRoomList() ([]Room, error)
-	GetRoomsSummary() (*RoomsSummary, error)
+	GetRoom(id int32) (Room, error)
+	DeleteRoom(id int32) error
 	CreateRoom(maxClients int32) (Room, error)
+
+	ListRooms() ([]Room, error)
+
+	Summary() (*RoomsSummary, error)
 }

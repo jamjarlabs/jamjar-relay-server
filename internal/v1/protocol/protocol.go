@@ -23,9 +23,15 @@ import (
 )
 
 type Protocol interface {
+	// Definitions for client interactions
 	Connect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room, bool)
 	Reconnect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room, bool)
 	Disconnect(connected *session.Session, room room.Room) bool
 	List(payload *transport.Payload, connected *session.Session, room room.Room) bool
 	RelayMessage(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	GrantHost(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	Kick(payload *transport.Payload, connected *session.Session, room room.Room) bool
+
+	// Definitions for server control
+	CloseRoom(roomID int32) error
 }
