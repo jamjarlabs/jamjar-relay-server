@@ -61,7 +61,6 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 
 	// Set up write loop
 	go func() {
-		defer c.Close()
 		for {
 			select {
 			case msg := <-connectedClient.Write:
@@ -126,6 +125,10 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 				exit = h.Protocol.List(payload, connectedClient, room)
 			case transport.Payload_REQUEST_RELAY_MESSAGE:
 				exit = h.Protocol.RelayMessage(payload, connectedClient, room)
+			case transport.Payload_REQUEST_GRANT_HOST:
+				exit = h.Protocol.GrantHost(payload, connectedClient, room)
+			case transport.Payload_REQUEST_KICK:
+				exit = h.Protocol.Kick(payload, connectedClient, room)
 			}
 		case websocket.CloseMessage:
 			exit = h.Protocol.Disconnect(connectedClient, room)

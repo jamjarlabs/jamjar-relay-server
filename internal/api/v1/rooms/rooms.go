@@ -24,12 +24,14 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/api/v1/api"
+	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/protocol"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/room"
 	relayhttp "github.com/jamjarlabs/jamjar-relay-server/specs/v1/http"
 )
 
 type Handle struct {
 	RoomManager room.RoomManager
+	Protocol    protocol.Protocol
 }
 
 type RoomCreationRequest struct {
@@ -49,7 +51,7 @@ func (h *Handle) Get(w http.ResponseWriter, r *http.Request) {
 
 	id := int32(id64)
 
-	retrievedRoom, err := h.RoomManager.GetRoomWithID(id)
+	retrievedRoom, err := h.RoomManager.GetRoom(id)
 	if err != nil {
 		switch v := err.(type) {
 		case room.ErrNoRoomFound:
@@ -82,8 +84,44 @@ func (h *Handle) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *Handle) Delete(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "room_id")
+	id64, err := strconv.ParseInt(idStr, 10, 32)
+	if err != nil {
+		api.HTTPFail(w, &relayhttp.Failure{
+			Code:    http.StatusBadRequest,
+			Message: "Invalid room ID provided, must be a 32-bit integer",
+		})
+		return
+	}
+
+	id := int32(id64)
+
+	err = h.Protocol.CloseRoom(id)
+	if err != nil {
+		switch v := err.(type) {
+		case room.ErrNoRoomFound:
+			api.HTTPFail(w, &relayhttp.Failure{
+				Code:    http.StatusBadRequest,
+				Message: v.Message,
+			})
+			return
+		default:
+			api.HTTPFail(w, &relayhttp.Failure{
+				Code:    http.StatusInternalServerError,
+				Message: fmt.Sprintf("Internal Server Error: %s", err.Error()),
+			})
+			return
+		}
+	}
+
+	api.HTTPSucceed(w, &relayhttp.Success{
+		Code: http.StatusOK,
+	})
+}
+
 func (h *Handle) Summary(w http.ResponseWriter, r *http.Request) {
-	summary, err := h.RoomManager.GetRoomsSummary()
+	summary, err := h.RoomManager.Summary()
 	if err != nil {
 		api.HTTPFail(w, &relayhttp.Failure{
 			Code:    http.StatusInternalServerError,
@@ -157,7 +195,7 @@ func (h *Handle) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handle) List(w http.ResponseWriter, r *http.Request) {
-	rooms, err := h.RoomManager.GetRoomList()
+	rooms, err := h.RoomManager.ListRooms()
 	if err != nil {
 		api.HTTPFail(w, &relayhttp.Failure{
 			Code:    http.StatusInternalServerError,

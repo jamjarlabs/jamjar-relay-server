@@ -11,5 +11,8 @@ run: generate vendor_modules
 cli: generate vendor_modules
 	go run -mod vendor cmd/cli/main.go ws://localhost:8000/v1/websocket
 
+lint:
+	gofmt -s -w .
+
 generate:
 	protoc -I=specs --go_out=paths=source_relative:./specs $(shell find specs/ -iname "*.proto")

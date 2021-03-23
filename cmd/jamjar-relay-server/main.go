@@ -70,18 +70,21 @@ func main() {
 
 	roomManager := roomv1.NewRoomMemoryManager(maxClients, roomFactory, ceilToNearest)
 
+	protocol := &protocol.StandardProtocol{
+		RoomManager: roomManager,
+	}
+
 	router := chi.NewRouter()
 
 	// Set up API
 	api := &v1.API{
 		Router: router,
 		Websocket: &websockets.Handle{
-			Protocol: &protocol.StandardProtocol{
-				RoomManager: roomManager,
-			},
+			Protocol: protocol,
 		},
 		Rooms: &rooms.Handle{
 			RoomManager: roomManager,
+			Protocol:    protocol,
 		},
 	}
 	api.Routes()
