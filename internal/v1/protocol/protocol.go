@@ -22,16 +22,26 @@ import (
 	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/transport"
 )
 
+// Protocol defines the contract that a v1 protocol should fufil, and the actions possible
 type Protocol interface {
-	// Definitions for client interactions
+	// Definitions for client interactions, the boolean response determines if the connection should be stopped,
+	// true = break connection, false = keep connection
+
+	// Connect defines a client connecting to a room
 	Connect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room, bool)
+	// Reconnect defines a client reconnecting to a room
 	Reconnect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room, bool)
+	// Disconnect defines a client disconnecting from a room and closing the connection
 	Disconnect(connected *session.Session, room room.Room) bool
+	// List defines a client requesting a list of all clients connected to a room
 	List(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	// RelayMessage defines a client sending a message to the room
 	RelayMessage(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	// GrantHost defines a client transferring the room's host powers to another client
 	GrantHost(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	// Kick defines a client removing another client from the room
 	Kick(payload *transport.Payload, connected *session.Session, room room.Room) bool
 
-	// Definitions for server control
+	// CloseRoom is a server based control for closing a room and disconnecting all clients
 	CloseRoom(roomID int32) error
 }

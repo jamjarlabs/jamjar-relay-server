@@ -68,7 +68,7 @@ func main() {
 
 	rand.Seed(time.Now().UTC().UnixNano())
 
-	roomManager := roomv1.NewRoomMemoryManager(maxClients, roomFactory, ceilToNearest)
+	roomManager := roomv1.NewMemoryManager(maxClients, roomFactory, ceilToNearest)
 
 	protocol := &protocol.StandardProtocol{
 		RoomManager: roomManager,

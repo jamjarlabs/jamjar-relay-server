@@ -16,6 +16,7 @@ limitations under the License.
 
 package room
 
+// ErrRequestTooManyClients occurs if a room is requested with more clients than are available
 type ErrRequestTooManyClients struct {
 	Message string
 }
@@ -24,6 +25,7 @@ func (e ErrRequestTooManyClients) Error() string {
 	return "requested too many clients for room"
 }
 
+// ErrNoRoomFound occurs if a room cannot be found
 type ErrNoRoomFound struct {
 	Message string
 }
@@ -32,6 +34,7 @@ func (e ErrNoRoomFound) Error() string {
 	return "no room found"
 }
 
+// ErrNoMatchingClient occurs when a client cannot be found in a room
 type ErrNoMatchingClient struct {
 	Message string
 }
@@ -40,6 +43,7 @@ func (e ErrNoMatchingClient) Error() string {
 	return "no matching client"
 }
 
+// ErrInvalidSecret occurs when a client's secret is not valid
 type ErrInvalidSecret struct {
 	Message string
 }
@@ -48,6 +52,7 @@ func (e ErrInvalidSecret) Error() string {
 	return "invalid secret"
 }
 
+// ErrRoomFull occurs when a room is full
 type ErrRoomFull struct {
 	Message string
 }
@@ -56,6 +61,7 @@ func (e ErrRoomFull) Error() string {
 	return "room full"
 }
 
+// ErrMaxClientTooSmall occurs when trying to create a room with a max client value that is too small
 type ErrMaxClientTooSmall struct {
 	Message string
 }

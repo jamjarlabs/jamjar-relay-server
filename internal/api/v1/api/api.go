@@ -23,44 +23,7 @@ import (
 
 	"github.com/golang/glog"
 	relayhttp "github.com/jamjarlabs/jamjar-relay-server/specs/v1/http"
-	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/transport"
-	"google.golang.org/protobuf/proto"
 )
-
-func WebSocketFail(failure *transport.Error) []byte {
-	if failure.Code == http.StatusInternalServerError {
-		glog.Error(failure.Message)
-	}
-
-	failureBytes, err := proto.Marshal(failure)
-	if err != nil {
-		// Should not occur, panic
-		panic(err)
-	}
-
-	networkMessage := transport.Payload{
-		Flag: transport.Payload_RESPONSE_ERROR,
-		Data: failureBytes,
-	}
-
-	response, err := proto.Marshal(&networkMessage)
-	if err != nil {
-		// Should not occur, panic
-		panic(err)
-	}
-
-	return response
-}
-
-func WebSocketSucceed(networkMessage *transport.Payload) []byte {
-	response, err := proto.Marshal(networkMessage)
-	if err != nil {
-		// Should not occur, panic
-		panic(err)
-	}
-
-	return response
-}
 
 // HTTPFail writes a failed API api to the api writer provided.
 func HTTPFail(w http.ResponseWriter, failure *relayhttp.Failure) {

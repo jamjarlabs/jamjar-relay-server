@@ -21,8 +21,10 @@ import (
 	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 )
 
-type RoomFactory func(id int32, secret int32, maxClients int32) (Room, error)
+// Factory defines a function for generating a room based on standard options
+type Factory func(id int32, secret int32, maxClients int32) (Room, error)
 
+// Room defines the contract for interacting with a room
 type Room interface {
 	RoomMatches(id int32, secret int32) bool
 
@@ -37,39 +39,50 @@ type Room interface {
 	IsHost(potentialHost *client.Client) (bool, error)
 	SetHost(hostID *int32) (*session.Session, error)
 	GetHost() (*session.Session, error)
-	GetInfo() (*RoomInfo, error)
+	GetInfo() (*Info, error)
 
-	SetStatus(RoomStatus)
-	GetStatus() RoomStatus
+	SetStatus(Status)
+	GetStatus() Status
 }
 
-type RoomStatus int32
+// Status defines the current status of the room - it's current state (is it starting, running, closing)
+type Status int32
+
+func (r Status) String() string {
+	return [...]string{"RUNNING", "CLOSING"}[r]
+}
 
 const (
-	RoomStatus_RUNNING RoomStatus = iota
-	RoomStatus_CLOSING RoomStatus = iota
+	// StatusRunning marks a room as running
+	StatusRunning Status = iota
+	// StatusClosing marks a room as in the process of closing
+	StatusClosing
 )
 
-type RoomInfo struct {
-	ID             int32 `json:"id"`
-	Secret         int32 `json:"secret"`
-	MaxClients     int32 `json:"max_clients"`
-	CurrentClients int32 `json:"current_clients"`
+// Info defines useful information about a room that can be easily serialised
+type Info struct {
+	ID             int32  `json:"id"`
+	Secret         int32  `json:"secret"`
+	MaxClients     int32  `json:"max_clients"`
+	CurrentClients int32  `json:"current_clients"`
+	RoomStatus     string `json:"room_status"`
 }
 
-type RoomsSummary struct {
+// Summary defines a grouped summary of multiple rooms, useful for seeing the overall state of the relay server
+type Summary struct {
 	NumberOfRooms    int32 `json:"number_of_rooms"`
 	MaxClients       int32 `json:"max_clients"`
 	CurrentClients   int32 `json:"current_clients"`
 	CommittedClients int32 `json:"committed_clients"`
 }
 
-type RoomManager interface {
+// Manager defines a contract for managing rooms in a centralised space
+type Manager interface {
 	GetRoom(id int32) (Room, error)
 	DeleteRoom(id int32) error
 	CreateRoom(maxClients int32) (Room, error)
 
 	ListRooms() ([]Room, error)
 
-	Summary() (*RoomsSummary, error)
+	Summary() (*Summary, error)
 }

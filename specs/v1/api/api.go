@@ -14,23 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package session
+package api
 
-import (
-	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
-)
-
-// Session defines a currently connected client, with connection agnostic ways for writing and closing
-type Session struct {
-	CloseSignal chan struct{}
-	Closed      bool
-	Write       chan []byte
-	Client      *client.Client
-	RoomID      *int32
-}
-
-// Close closes a session, disconnecting a client from the relay
-func (s *Session) Close() {
-	s.Closed = true
-	close(s.CloseSignal)
+// RoomCreationRequest defines the data needed to create a new room
+type RoomCreationRequest struct {
+	MaxClients int32 `json:"max_clients"`
 }
