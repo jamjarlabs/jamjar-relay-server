@@ -41,7 +41,6 @@ jobs:
         fi
         make VERSION=${VERSION}
         make all
-        make package_all
     - name: Release
       env:
         DOCKER_USER: ${{ secrets.DOCKER_USER }}
