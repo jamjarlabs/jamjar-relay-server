@@ -13,7 +13,7 @@
 # limitations under the License.
 
 # Build stage
-FROM golang:1.14.4
+FROM golang:1.16.2
 # Set up build dir
 WORKDIR /build
 # Copy in source files
