@@ -37,7 +37,7 @@ jobs:
           # github.ref is in the form refs/tags/VERSION, so apply regex to just get version
           VERSION=$(echo "${{ github.ref }}" | grep -P '([^\/]+$)' -o)
         else
-          VERSION="0.0.0"
+          VERSION=$(git rev-parse --short ${{ github.sha }})
         fi
         make VERSION=${VERSION}
         make all
