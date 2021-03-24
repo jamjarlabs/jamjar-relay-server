@@ -23,10 +23,12 @@ import (
 	"github.com/jamjarlabs/jamjar-relay-server/internal/api/v1/api"
 )
 
+// WebsocketHandler defines the contract for serving websocket requests
 type WebsocketHandler interface {
 	Websocket(w http.ResponseWriter, r *http.Request)
 }
 
+// RoomsHandler defines the contract for serving room requests
 type RoomsHandler interface {
 	Get(w http.ResponseWriter, r *http.Request)
 	Delete(w http.ResponseWriter, r *http.Request)

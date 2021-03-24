@@ -26,18 +26,17 @@ import (
 	"github.com/jamjarlabs/jamjar-relay-server/internal/api/v1/api"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/protocol"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/room"
+	apispecv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/api"
 	relayhttp "github.com/jamjarlabs/jamjar-relay-server/specs/v1/http"
 )
 
+// Handle serves HTTP requests that manage the relay server's rooms
 type Handle struct {
-	RoomManager room.RoomManager
+	RoomManager room.Manager
 	Protocol    protocol.Protocol
 }
 
-type RoomCreationRequest struct {
-	MaxClients int32 `json:"max_clients"`
-}
-
+// Get handles a request to get a room with an ID
 func (h *Handle) Get(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "room_id")
 	id64, err := strconv.ParseInt(idStr, 10, 32)
@@ -84,6 +83,7 @@ func (h *Handle) Get(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Delete handles a request to delete a room with an ID
 func (h *Handle) Delete(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "room_id")
 	id64, err := strconv.ParseInt(idStr, 10, 32)
@@ -120,6 +120,7 @@ func (h *Handle) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Summary handles generating a summary of all the rooms
 func (h *Handle) Summary(w http.ResponseWriter, r *http.Request) {
 	summary, err := h.RoomManager.Summary()
 	if err != nil {
@@ -136,6 +137,7 @@ func (h *Handle) Summary(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Create handles making a new room
 func (h *Handle) Create(w http.ResponseWriter, r *http.Request) {
 	if r.Body == nil {
 		api.HTTPFail(w, &relayhttp.Failure{
@@ -145,7 +147,7 @@ func (h *Handle) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var createRoom RoomCreationRequest
+	var createRoom apispecv1.RoomCreationRequest
 	err := json.NewDecoder(r.Body).Decode(&createRoom)
 	if err != nil {
 		api.HTTPFail(w, &relayhttp.Failure{
@@ -194,6 +196,7 @@ func (h *Handle) Create(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// List handles building a list of rooms on the relay server
 func (h *Handle) List(w http.ResponseWriter, r *http.Request) {
 	rooms, err := h.RoomManager.ListRooms()
 	if err != nil {
@@ -204,7 +207,7 @@ func (h *Handle) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	infos := []*room.RoomInfo{}
+	infos := []*room.Info{}
 
 	for _, room := range rooms {
 		info, err := room.GetInfo()

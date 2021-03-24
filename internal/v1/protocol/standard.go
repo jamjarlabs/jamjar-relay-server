@@ -21,7 +21,6 @@ import (
 	"net/http"
 
 	"github.com/golang/glog"
-	apiv1 "github.com/jamjarlabs/jamjar-relay-server/internal/api/v1/api"
 	roomv1 "github.com/jamjarlabs/jamjar-relay-server/internal/v1/room"
 	sessionv1 "github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
 	clientv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
@@ -32,13 +31,15 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// StandardProtocol is the standard implementation of the v1 relay protocol
 type StandardProtocol struct {
-	RoomManager roomv1.RoomManager
+	RoomManager roomv1.Manager
 }
 
+// Connect handles a new client connecting to a room
 func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sessionv1.Session, currentRoom roomv1.Room) (*sessionv1.Session, roomv1.Room, bool) {
 	if currentRoom != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot connect to a different room while already connected to another",
 		})
@@ -48,7 +49,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 	joinRequest := &roomspecv1.JoinRoomRequest{}
 	err := proto.Unmarshal(payload.Data, joinRequest)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid join request provided, does not conform to spec, %v", err),
 		})
@@ -57,7 +58,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 
 	rooms, err := p.RoomManager.ListRooms()
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room list, %v", err),
 		})
@@ -72,13 +73,13 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 		if err != nil {
 			switch v := err.(type) {
 			case roomv1.ErrRoomFull:
-				connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+				connected.Write <- Fail(&transportv1.Error{
 					Code:    http.StatusBadRequest,
 					Message: v.Message,
 				})
 				return connected, currentRoom, false
 			default:
-				connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+				connected.Write <- Fail(&transportv1.Error{
 					Code:    http.StatusInternalServerError,
 					Message: fmt.Sprintf("Failed to register new client to room, %v", err),
 				})
@@ -97,7 +98,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 			panic(err)
 		}
 
-		connected.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+		connected.Write <- Succeed(&transportv1.Payload{
 			Flag: transportv1.Payload_RESPONSE_CONNECT,
 			Data: responseData,
 		})
@@ -107,7 +108,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 		return connected, matchRoom, false
 	}
 
-	connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+	connected.Write <- Fail(&transportv1.Error{
 		Code:    http.StatusBadRequest,
 		Message: fmt.Sprintf("No valid room match found for ID %d", joinRequest.RoomID),
 	})
@@ -115,9 +116,10 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 	return connected, currentRoom, false
 }
 
+// Reconnect handles an existing client reconnecting to a room
 func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) (*sessionv1.Session, roomv1.Room, bool) {
 	if room != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot connect to a different room while already connected to another",
 		})
@@ -127,7 +129,7 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 	rejoinRequest := &roomspecv1.RejoinRoomRequest{}
 	err := proto.Unmarshal(payload.Data, rejoinRequest)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid join request provided, does not conform to spec, %v", err),
 		})
@@ -136,7 +138,7 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 
 	rooms, err := p.RoomManager.ListRooms()
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room list, %v", err),
 		})
@@ -149,19 +151,19 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 			if err != nil {
 				switch v := err.(type) {
 				case roomv1.ErrInvalidSecret:
-					connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+					connected.Write <- Fail(&transportv1.Error{
 						Code:    http.StatusBadRequest,
 						Message: v.Message,
 					})
 					return connected, room, false
 				case roomv1.ErrRoomFull:
-					connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+					connected.Write <- Fail(&transportv1.Error{
 						Code:    http.StatusBadRequest,
 						Message: v.Message,
 					})
 					return connected, room, false
 				default:
-					connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+					connected.Write <- Fail(&transportv1.Error{
 						Code:    http.StatusInternalServerError,
 						Message: fmt.Sprintf("Failed to register existing client to room, %v", err),
 					})
@@ -180,7 +182,7 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 				panic(err)
 			}
 
-			connected.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+			connected.Write <- Succeed(&transportv1.Payload{
 				Flag: transportv1.Payload_RESPONSE_CONNECT,
 				Data: responseData,
 			})
@@ -191,16 +193,17 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 		}
 	}
 
-	connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+	connected.Write <- Fail(&transportv1.Error{
 		Code:    http.StatusBadRequest,
 		Message: fmt.Sprintf("No valid room match found for ID %d", rejoinRequest.RoomID),
 	})
 	return connected, room, false
 }
 
+// Disconnect handles a client disconnecting from a room and closing the connection
 func (p *StandardProtocol) Disconnect(connected *sessionv1.Session, room roomv1.Room) bool {
 	connected.Close()
-	if connected.Client == nil || room == nil || room.GetStatus() == roomv1.RoomStatus_CLOSING {
+	if connected.Client == nil || room == nil || room.GetStatus() == roomv1.StatusClosing {
 		return true
 	}
 
@@ -223,9 +226,10 @@ func (p *StandardProtocol) Disconnect(connected *sessionv1.Session, room roomv1.
 	return true
 }
 
+// List handles a client requesting a list of all clients connected to a room
 func (p *StandardProtocol) List(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
 	if connected == nil || room == nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to list a room's clients",
 		})
@@ -234,7 +238,7 @@ func (p *StandardProtocol) List(payload *transportv1.Payload, connected *session
 
 	connectedClients, err := room.GetConnected()
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room's connected clients, %v", err),
 		})
@@ -246,7 +250,7 @@ func (p *StandardProtocol) List(payload *transportv1.Payload, connected *session
 		connectedClient := connectedClients[i]
 		host, err := room.IsHost(connectedClient.Client)
 		if err != nil {
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 			})
@@ -266,16 +270,17 @@ func (p *StandardProtocol) List(payload *transportv1.Payload, connected *session
 		panic(err)
 	}
 
-	connected.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+	connected.Write <- Succeed(&transportv1.Payload{
 		Flag: transportv1.Payload_RESPONSE_LIST,
 		Data: responseData,
 	})
 	return false
 }
 
+// RelayMessage handles a client sending a message to the room
 func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
 	if connected == nil || room == nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to relay a message",
 		})
@@ -285,7 +290,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 	relayMsg := &relayv1.Relay{}
 	err := proto.Unmarshal(payload.Data, relayMsg)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Relayed message does not conform to spec, %v", err),
 		})
@@ -294,7 +299,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 
 	connectedClientList, err := room.GetConnected()
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room's connected clients, %v", err),
 		})
@@ -303,7 +308,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 
 	isHost, err := room.IsHost(connected.Client)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 		})
@@ -313,7 +318,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 	switch relayMsg.Type {
 	case relayv1.Relay_BROADCAST:
 		if !isHost {
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Must be host to broadcast",
 			})
@@ -323,7 +328,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 		return false
 	case relayv1.Relay_TARGET:
 		if !isHost {
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Must be host to send targeted messages",
 			})
@@ -331,7 +336,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 		}
 
 		if relayMsg.Target == nil {
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Must provide a target ID to send a message to",
 			})
@@ -342,20 +347,20 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 			if *relayMsg.Target != connectedClient.Client.ID {
 				continue
 			}
-			connectedClient.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+			connectedClient.Write <- Succeed(&transportv1.Payload{
 				Flag: transportv1.Payload_RESPONSE_RELAY_MESSAGE,
 				Data: payload.Data,
 			})
 			return false
 		}
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("No target client found with ID %d", *relayMsg.Target),
 		})
 		return false
 	case relayv1.Relay_HOST:
 		if isHost {
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Hosts cannot send messages to themselves",
 			})
@@ -364,14 +369,14 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 
 		host, err := room.GetHost()
 		if err != nil {
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to get host, %v", err),
 			})
 			return false
 		}
 
-		host.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+		host.Write <- Succeed(&transportv1.Payload{
 			Flag: transportv1.Payload_RESPONSE_RELAY_MESSAGE,
 			Data: payload.Data,
 		})
@@ -379,9 +384,10 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 	return false
 }
 
+// GrantHost handles a client transferring the room's host powers to another client
 func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
 	if connected == nil || room == nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to grant another client host",
 		})
@@ -391,7 +397,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 	grantHostRequest := &roomspecv1.GrantHostRequest{}
 	err := proto.Unmarshal(payload.Data, grantHostRequest)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid grant host request provided, does not conform to spec, %v", err),
 		})
@@ -400,7 +406,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 
 	isHost, err := room.IsHost(connected.Client)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 		})
@@ -408,7 +414,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 	}
 
 	if !isHost {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be host to grant host to another host",
 		})
@@ -416,7 +422,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 	}
 
 	if grantHostRequest.HostID == connected.Client.ID {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot transfer host powers to yourself",
 		})
@@ -427,13 +433,13 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 	if err != nil {
 		switch v := err.(type) {
 		case roomv1.ErrNoMatchingClient:
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: v.Message,
 			})
 			return false
 		default:
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to get client with ID %d, %v", grantHostRequest.HostID, err),
 			})
@@ -443,7 +449,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 
 	err = p.changeHost(room, host)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to change host, %v", err),
 		})
@@ -453,9 +459,10 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 	return false
 }
 
+// Kick handles a client removing another client from the room
 func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
 	if connected == nil || room == nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to kick a client",
 		})
@@ -465,7 +472,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 	kickRequest := &roomspecv1.KickRequest{}
 	err := proto.Unmarshal(payload.Data, kickRequest)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid kick request provided, does not conform to spec, %v", err),
 		})
@@ -474,7 +481,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 
 	isHost, err := room.IsHost(connected.Client)
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 		})
@@ -482,7 +489,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 	}
 
 	if !isHost {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be host to kick",
 		})
@@ -490,7 +497,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 	}
 
 	if kickRequest.ClientID == connected.Client.ID {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot kick yourself",
 		})
@@ -501,13 +508,13 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 	if err != nil {
 		switch v := err.(type) {
 		case roomv1.ErrNoMatchingClient:
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: v.Message,
 			})
 			return false
 		default:
-			connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to kick client with ID %d, %v", kickRequest.ClientID, err),
 			})
@@ -525,20 +532,21 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 		panic(err)
 	}
 
-	connected.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+	connected.Write <- Succeed(&transportv1.Payload{
 		Flag: transportv1.Payload_RESPONSE_KICK,
 		Data: kickData,
 	})
 	return false
 }
 
+// CloseRoom handles a room being closed and all clients disconnecting
 func (p *StandardProtocol) CloseRoom(roomID int32) error {
 	retrievedRoom, err := p.RoomManager.GetRoom(roomID)
 	if err != nil {
 		return err
 	}
 
-	retrievedRoom.SetStatus(roomv1.RoomStatus_CLOSING)
+	retrievedRoom.SetStatus(roomv1.StatusClosing)
 
 	connectedClientList, err := retrievedRoom.GetConnected()
 	if err != nil {
@@ -555,7 +563,7 @@ func (p *StandardProtocol) CloseRoom(roomID int32) error {
 func (p *StandardProtocol) setHostIfNone(connected *sessionv1.Session, room roomv1.Room) {
 	host, err := room.GetHost()
 	if err != nil {
-		connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve the current host, %v", err),
 		})
@@ -563,12 +571,12 @@ func (p *StandardProtocol) setHostIfNone(connected *sessionv1.Session, room room
 		if host == nil {
 			_, err := room.SetHost(&connected.Client.ID)
 			if err != nil {
-				connected.Write <- apiv1.WebSocketFail(&transportv1.Error{
+				connected.Write <- Fail(&transportv1.Error{
 					Code:    http.StatusInternalServerError,
 					Message: fmt.Sprintf("Failed to update host, %v", err),
 				})
 			} else {
-				connected.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+				connected.Write <- Succeed(&transportv1.Payload{
 					Flag: transportv1.Payload_RESPONSE_ASSIGN_HOST,
 				})
 			}
@@ -582,7 +590,7 @@ func (p *StandardProtocol) broadcast(payload *transportv1.Payload, connected *se
 			// Message should only be sent to other clients, not sent back to origin
 			continue
 		}
-		connectedClient.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+		connectedClient.Write <- Succeed(&transportv1.Payload{
 			Flag: transportv1.Payload_RESPONSE_RELAY_MESSAGE,
 			Data: payload.Data,
 		})
@@ -612,7 +620,7 @@ func (p *StandardProtocol) changeHost(room roomv1.Room, host *sessionv1.Session)
 	}
 
 	for _, connectedClient := range connectedClients {
-		connectedClient.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+		connectedClient.Write <- Succeed(&transportv1.Payload{
 			Flag: transportv1.Payload_RESPONSE_BEGIN_HOST_MIGRATE,
 		})
 	}
@@ -632,13 +640,13 @@ func (p *StandardProtocol) changeHost(room roomv1.Room, host *sessionv1.Session)
 		panic(err)
 	}
 
-	host.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+	host.Write <- Succeed(&transportv1.Payload{
 		Flag: transportv1.Payload_RESPONSE_ASSIGN_HOST,
 		Data: finishMigrationBytes,
 	})
 
 	for _, connectedClient := range connectedClients {
-		connectedClient.Write <- apiv1.WebSocketSucceed(&transportv1.Payload{
+		connectedClient.Write <- Succeed(&transportv1.Payload{
 			Flag: transportv1.Payload_RESPONSE_FINISH_HOST_MIGRATE,
 		})
 	}

@@ -22,7 +22,6 @@ import (
 
 	"github.com/golang/glog"
 	"github.com/gorilla/websocket"
-	"github.com/jamjarlabs/jamjar-relay-server/internal/api/v1/api"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/protocol"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/room"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
@@ -30,6 +29,8 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Handle is used to serve websocket requests, with goroutines maintained for reading and writing to the websocket
+// in a safe way
 type Handle struct {
 	Protocol protocol.Protocol
 }
@@ -40,6 +41,8 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+// Websocket serves the main websocket connection, upgrading the request to a websocket connection, setting up message
+// listening and writing goroutines and routing messages through the protocol
 func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -110,7 +113,7 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 			err = proto.Unmarshal(messageData, payload)
 			if err != nil {
 				glog.Error(err)
-				connectedClient.Write <- api.WebSocketFail(&transport.Error{
+				connectedClient.Write <- protocol.Fail(&transport.Error{
 					Code:    http.StatusBadRequest,
 					Message: fmt.Sprintf("Invalid message provided, does not conform to spec, %v", err),
 				})
@@ -133,7 +136,7 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 		case websocket.CloseMessage:
 			exit = h.Protocol.Disconnect(connectedClient, room)
 		default:
-			connectedClient.Write <- api.WebSocketFail(&transport.Error{
+			connectedClient.Write <- protocol.Fail(&transport.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Invalid message provided, must be in binary format",
 			})

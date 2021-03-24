@@ -9,6 +9,7 @@ and all messages are forwarded, or 'relayed' to other clients through the server
 ### Dependencies
 
 - [Golang](https://golang.org/doc/install) `>= 1.14.6`
+- Golint
 - [Protoc](http://google.github.io/proto-lens/installing-protoc.html) `== 3.15.6`
 - [Golang Protobuf Plugin](https://developers.google.com/protocol-buffers/docs/reference/go-generated) `== 1.26.0`
 

@@ -26,8 +26,9 @@ import (
 	clientv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 )
 
-func NewRoomMemoryManager(maxClients int32, roomFactory RoomFactory, ceilCommittedToNearest int32) *RoomMemoryManager {
-	return &RoomMemoryManager{
+// NewMemoryManager creates a new memory room manager with some default options
+func NewMemoryManager(maxClients int32, roomFactory Factory, ceilCommittedToNearest int32) *MemoryManager {
+	return &MemoryManager{
 		MaxClients:             maxClients,
 		Rooms:                  make(map[int32]Room),
 		RoomFactory:            roomFactory,
@@ -35,14 +36,16 @@ func NewRoomMemoryManager(maxClients int32, roomFactory RoomFactory, ceilCommitt
 	}
 }
 
-type RoomMemoryManager struct {
-	RoomFactory            RoomFactory
+// MemoryManager manages rooms in memory
+type MemoryManager struct {
+	RoomFactory            Factory
 	MaxClients             int32
 	Rooms                  map[int32]Room
 	CeilCommittedToNearest int32
 }
 
-func (m *RoomMemoryManager) GetRoom(id int32) (Room, error) {
+// GetRoom retrieves a room specified by an ID
+func (m *MemoryManager) GetRoom(id int32) (Room, error) {
 	room := m.Rooms[id]
 	if room == nil {
 		return nil, ErrNoRoomFound{
@@ -52,12 +55,14 @@ func (m *RoomMemoryManager) GetRoom(id int32) (Room, error) {
 	return m.Rooms[id], nil
 }
 
-func (m *RoomMemoryManager) DeleteRoom(id int32) error {
+// DeleteRoom deletes a room from memory specified by an ID
+func (m *MemoryManager) DeleteRoom(id int32) error {
 	delete(m.Rooms, id)
 	return nil
 }
 
-func (m *RoomMemoryManager) ListRooms() ([]Room, error) {
+// ListRooms returns a list of all the room manager's rooms
+func (m *MemoryManager) ListRooms() ([]Room, error) {
 	list := make([]Room, 0, len(m.Rooms))
 	for _, room := range m.Rooms {
 		list = append(list, room)
@@ -65,7 +70,8 @@ func (m *RoomMemoryManager) ListRooms() ([]Room, error) {
 	return list, nil
 }
 
-func (m *RoomMemoryManager) Summary() (*RoomsSummary, error) {
+// Summary generates a rooms summary from all the rooms in the room manager
+func (m *MemoryManager) Summary() (*Summary, error) {
 	currentClients := int32(0)
 	committedClients := int32(0)
 	for _, room := range m.Rooms {
@@ -76,7 +82,7 @@ func (m *RoomMemoryManager) Summary() (*RoomsSummary, error) {
 		currentClients += info.CurrentClients
 		committedClients += int32(math.Ceil(float64(info.MaxClients)/float64(m.CeilCommittedToNearest)) * float64(m.CeilCommittedToNearest))
 	}
-	return &RoomsSummary{
+	return &Summary{
 		NumberOfRooms:    int32(len(m.Rooms)),
 		MaxClients:       m.MaxClients,
 		CurrentClients:   currentClients,
@@ -84,7 +90,8 @@ func (m *RoomMemoryManager) Summary() (*RoomsSummary, error) {
 	}, nil
 }
 
-func (m *RoomMemoryManager) CreateRoom(maxClients int32) (Room, error) {
+// CreateRoom creates a new room in the room manager
+func (m *MemoryManager) CreateRoom(maxClients int32) (Room, error) {
 
 	summary, err := m.Summary()
 
@@ -128,6 +135,8 @@ func (m *RoomMemoryManager) CreateRoom(maxClients int32) (Room, error) {
 	return room, nil
 }
 
+// NewMemoryRoom creates a new memory room with some default options, it can return an error if the maxClients value
+// is invalid (less than 1)
 func NewMemoryRoom(id int32, secret int32, maxClients int32) (*MemoryRoom, error) {
 	if maxClients <= 0 {
 		return nil, ErrMaxClientTooSmall{
@@ -141,10 +150,11 @@ func NewMemoryRoom(id int32, secret int32, maxClients int32) (*MemoryRoom, error
 		MaxClients:          maxClients,
 		ConnectedClients:    []*sessionv1.Session{},
 		DisconnectedClients: []*clientv1.Client{},
-		RoomStatus:          RoomStatus_RUNNING,
+		RoomStatus:          StatusRunning,
 	}, nil
 }
 
+// MemoryRoom represents a room in memory, with the connected clients and options stored in memory
 type MemoryRoom struct {
 	ID                  int32
 	Secret              int32
@@ -152,35 +162,42 @@ type MemoryRoom struct {
 	HostID              *int32
 	ConnectedClients    []*sessionv1.Session
 	DisconnectedClients []*clientv1.Client
-	RoomStatus          RoomStatus
+	RoomStatus          Status
 }
 
-func (r *MemoryRoom) GetStatus() RoomStatus {
+// GetStatus returns the room's status
+func (r *MemoryRoom) GetStatus() Status {
 	return r.RoomStatus
 }
 
-func (r *MemoryRoom) SetStatus(status RoomStatus) {
+// SetStatus sets the room's status
+func (r *MemoryRoom) SetStatus(status Status) {
 	r.RoomStatus = status
 }
 
+// IsHost determines if a client is the room's host
 func (r *MemoryRoom) IsHost(potentialHost *clientv1.Client) (bool, error) {
 	// Not host if no host assigned, or ID doesn't match host ID
 	return &potentialHost.ID == r.HostID, nil
 }
 
+// RoomMatches determines if a room matches the ID and secret provided
 func (r *MemoryRoom) RoomMatches(id int32, secret int32) bool {
 	return r.ID == id && r.Secret == secret
 }
 
-func (r *MemoryRoom) GetInfo() (*RoomInfo, error) {
-	return &RoomInfo{
+// GetInfo generates the room's info
+func (r *MemoryRoom) GetInfo() (*Info, error) {
+	return &Info{
 		ID:             r.ID,
 		Secret:         r.Secret,
 		MaxClients:     r.MaxClients,
 		CurrentClients: int32(len(r.ConnectedClients)),
+		RoomStatus:     r.RoomStatus.String(),
 	}, nil
 }
 
+// NewClient handles creating a new client for the room for the connection provided
 func (r *MemoryRoom) NewClient(connected *sessionv1.Session) (*sessionv1.Session, error) {
 	if int32(len(r.ConnectedClients)) >= r.MaxClients {
 		return connected, ErrRoomFull{
@@ -210,6 +227,7 @@ func (r *MemoryRoom) NewClient(connected *sessionv1.Session) (*sessionv1.Session
 	return connected, nil
 }
 
+// ExistingClient handles regenerating a client based on a previously disconnected client for the connection provided
 func (r *MemoryRoom) ExistingClient(connected *sessionv1.Session, clientID int32, clientSecret int32) (*sessionv1.Session, error) {
 	if int32(len(r.ConnectedClients)) >= r.MaxClients {
 		return connected, ErrRoomFull{
@@ -241,6 +259,7 @@ func (r *MemoryRoom) ExistingClient(connected *sessionv1.Session, clientID int32
 	}
 }
 
+// GetClient returns a client with the ID provided, if none found an error is returned
 func (r *MemoryRoom) GetClient(clientID int32) (*session.Session, error) {
 	for _, connectedClient := range r.ConnectedClients {
 		if connectedClient.Client.ID == clientID {
@@ -253,6 +272,7 @@ func (r *MemoryRoom) GetClient(clientID int32) (*session.Session, error) {
 	}
 }
 
+// RemoveClient handles removing a client from the room
 func (r *MemoryRoom) RemoveClient(clientID int32) error {
 	for i, connectedClient := range r.ConnectedClients {
 		if clientID == connectedClient.Client.ID {
@@ -266,10 +286,12 @@ func (r *MemoryRoom) RemoveClient(clientID int32) error {
 	}
 }
 
+// GetConnected returns a list of all currently connected sessions
 func (r *MemoryRoom) GetConnected() ([]*sessionv1.Session, error) {
 	return r.ConnectedClients, nil
 }
 
+// SetHost sets a room's host, can be set to nil for no host
 func (r *MemoryRoom) SetHost(hostID *int32) (*sessionv1.Session, error) {
 	if hostID == nil {
 		r.HostID = nil
@@ -286,6 +308,7 @@ func (r *MemoryRoom) SetHost(hostID *int32) (*sessionv1.Session, error) {
 	return host, nil
 }
 
+// GetHost gets a room's host
 func (r *MemoryRoom) GetHost() (*sessionv1.Session, error) {
 	if r.HostID == nil {
 		r.HostID = nil
