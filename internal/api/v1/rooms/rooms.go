@@ -32,8 +32,7 @@ import (
 
 // Handle serves HTTP requests that manage the relay server's rooms
 type Handle struct {
-	RoomManager room.Manager
-	Protocol    protocol.Protocol
+	Protocol protocol.Protocol
 }
 
 // Get handles a request to get a room with an ID
@@ -50,12 +49,12 @@ func (h *Handle) Get(w http.ResponseWriter, r *http.Request) {
 
 	id := int32(id64)
 
-	retrievedRoom, err := h.RoomManager.GetRoom(id)
+	retrievedRoom, err := h.Protocol.GetRoom(id)
 	if err != nil {
 		switch v := err.(type) {
 		case room.ErrNoRoomFound:
 			api.HTTPFail(w, &relayhttp.Failure{
-				Code:    http.StatusBadRequest,
+				Code:    http.StatusNotFound,
 				Message: v.Message,
 			})
 			return
@@ -102,7 +101,7 @@ func (h *Handle) Delete(w http.ResponseWriter, r *http.Request) {
 		switch v := err.(type) {
 		case room.ErrNoRoomFound:
 			api.HTTPFail(w, &relayhttp.Failure{
-				Code:    http.StatusBadRequest,
+				Code:    http.StatusNotFound,
 				Message: v.Message,
 			})
 			return
@@ -122,7 +121,7 @@ func (h *Handle) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Summary handles generating a summary of all the rooms
 func (h *Handle) Summary(w http.ResponseWriter, r *http.Request) {
-	summary, err := h.RoomManager.Summary()
+	summary, err := h.Protocol.Summary()
 	if err != nil {
 		api.HTTPFail(w, &relayhttp.Failure{
 			Code:    http.StatusInternalServerError,
@@ -157,7 +156,7 @@ func (h *Handle) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newRoom, err := h.RoomManager.CreateRoom(createRoom.MaxClients)
+	newRoom, err := h.Protocol.CreateRoom(createRoom.MaxClients)
 	if err != nil {
 		switch v := err.(type) {
 		case room.ErrRequestTooManyClients:
@@ -198,7 +197,7 @@ func (h *Handle) Create(w http.ResponseWriter, r *http.Request) {
 
 // List handles building a list of rooms on the relay server
 func (h *Handle) List(w http.ResponseWriter, r *http.Request) {
-	rooms, err := h.RoomManager.ListRooms()
+	rooms, err := h.Protocol.ListRooms()
 	if err != nil {
 		api.HTTPFail(w, &relayhttp.Failure{
 			Code:    http.StatusInternalServerError,

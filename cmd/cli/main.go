@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -243,8 +244,8 @@ func main() {
 		case actionSendMessage:
 
 			fmt.Printf("Message to send: ")
-			var msg string
-			fmt.Scanln(&msg)
+			in := bufio.NewReader(os.Stdin)
+			msg, _ := in.ReadString('\n')
 
 			fmt.Printf("Broadcast (b), target (t), or host (h): ")
 			var messageType string

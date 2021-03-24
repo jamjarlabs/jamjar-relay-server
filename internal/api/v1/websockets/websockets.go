@@ -104,8 +104,6 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		exit := false
-
 		switch mt {
 		case websocket.BinaryMessage:
 			payload := &transport.Payload{}
@@ -121,20 +119,20 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 			}
 			switch payload.Flag {
 			case transport.Payload_REQUEST_CONNECT:
-				connectedClient, room, exit = h.Protocol.Connect(payload, connectedClient, room)
+				connectedClient, room = h.Protocol.Connect(payload, connectedClient, room)
 			case transport.Payload_REQUEST_RECONNECT:
-				connectedClient, room, exit = h.Protocol.Reconnect(payload, connectedClient, room)
+				connectedClient, room = h.Protocol.Reconnect(payload, connectedClient, room)
 			case transport.Payload_REQUEST_LIST:
-				exit = h.Protocol.List(payload, connectedClient, room)
+				h.Protocol.List(payload, connectedClient, room)
 			case transport.Payload_REQUEST_RELAY_MESSAGE:
-				exit = h.Protocol.RelayMessage(payload, connectedClient, room)
+				h.Protocol.RelayMessage(payload, connectedClient, room)
 			case transport.Payload_REQUEST_GRANT_HOST:
-				exit = h.Protocol.GrantHost(payload, connectedClient, room)
+				h.Protocol.GrantHost(payload, connectedClient, room)
 			case transport.Payload_REQUEST_KICK:
-				exit = h.Protocol.Kick(payload, connectedClient, room)
+				h.Protocol.Kick(payload, connectedClient, room)
 			}
 		case websocket.CloseMessage:
-			exit = h.Protocol.Disconnect(connectedClient, room)
+			h.Protocol.Disconnect(connectedClient, room)
 		default:
 			connectedClient.Write <- protocol.Fail(&transport.Error{
 				Code:    http.StatusBadRequest,
@@ -142,7 +140,7 @@ func (h *Handle) Websocket(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		if exit {
+		if connectedClient.Closed {
 			return
 		}
 	}

@@ -37,13 +37,13 @@ type StandardProtocol struct {
 }
 
 // Connect handles a new client connecting to a room
-func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sessionv1.Session, currentRoom roomv1.Room) (*sessionv1.Session, roomv1.Room, bool) {
+func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sessionv1.Session, currentRoom roomv1.Room) (*sessionv1.Session, roomv1.Room) {
 	if currentRoom != nil {
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot connect to a different room while already connected to another",
 		})
-		return connected, currentRoom, false
+		return connected, currentRoom
 	}
 
 	joinRequest := &roomspecv1.JoinRoomRequest{}
@@ -53,7 +53,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid join request provided, does not conform to spec, %v", err),
 		})
-		return connected, currentRoom, false
+		return connected, currentRoom
 	}
 
 	rooms, err := p.RoomManager.ListRooms()
@@ -62,7 +62,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room list, %v", err),
 		})
-		return connected, currentRoom, false
+		return connected, currentRoom
 	}
 
 	for _, matchRoom := range rooms {
@@ -77,13 +77,13 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 					Code:    http.StatusBadRequest,
 					Message: v.Message,
 				})
-				return connected, currentRoom, false
+				return connected, currentRoom
 			default:
 				connected.Write <- Fail(&transportv1.Error{
 					Code:    http.StatusInternalServerError,
 					Message: fmt.Sprintf("Failed to register new client to room, %v", err),
 				})
-				return connected, currentRoom, false
+				return connected, currentRoom
 			}
 		}
 
@@ -105,7 +105,7 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 
 		p.setHostIfNone(connected, matchRoom)
 
-		return connected, matchRoom, false
+		return connected, matchRoom
 	}
 
 	connected.Write <- Fail(&transportv1.Error{
@@ -113,17 +113,17 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 		Message: fmt.Sprintf("No valid room match found for ID %d", joinRequest.RoomID),
 	})
 
-	return connected, currentRoom, false
+	return connected, currentRoom
 }
 
 // Reconnect handles an existing client reconnecting to a room
-func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) (*sessionv1.Session, roomv1.Room, bool) {
+func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) (*sessionv1.Session, roomv1.Room) {
 	if room != nil {
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Cannot connect to a different room while already connected to another",
 		})
-		return connected, room, false
+		return connected, room
 	}
 
 	rejoinRequest := &roomspecv1.RejoinRoomRequest{}
@@ -133,7 +133,7 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid join request provided, does not conform to spec, %v", err),
 		})
-		return connected, room, false
+		return connected, room
 	}
 
 	rooms, err := p.RoomManager.ListRooms()
@@ -142,7 +142,7 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room list, %v", err),
 		})
-		return connected, room, false
+		return connected, room
 	}
 
 	for _, matchRoom := range rooms {
@@ -155,19 +155,19 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 						Code:    http.StatusBadRequest,
 						Message: v.Message,
 					})
-					return connected, room, false
+					return connected, room
 				case roomv1.ErrRoomFull:
 					connected.Write <- Fail(&transportv1.Error{
 						Code:    http.StatusBadRequest,
 						Message: v.Message,
 					})
-					return connected, room, false
+					return connected, room
 				default:
 					connected.Write <- Fail(&transportv1.Error{
 						Code:    http.StatusInternalServerError,
 						Message: fmt.Sprintf("Failed to register existing client to room, %v", err),
 					})
-					return connected, room, false
+					return connected, room
 				}
 			}
 
@@ -189,7 +189,7 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 
 			p.setHostIfNone(connected, matchRoom)
 
-			return connected, matchRoom, false
+			return connected, matchRoom
 		}
 	}
 
@@ -197,14 +197,14 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 		Code:    http.StatusBadRequest,
 		Message: fmt.Sprintf("No valid room match found for ID %d", rejoinRequest.RoomID),
 	})
-	return connected, room, false
+	return connected, room
 }
 
 // Disconnect handles a client disconnecting from a room and closing the connection
-func (p *StandardProtocol) Disconnect(connected *sessionv1.Session, room roomv1.Room) bool {
+func (p *StandardProtocol) Disconnect(connected *sessionv1.Session, room roomv1.Room) {
 	connected.Close()
 	if connected.Client == nil || room == nil || room.GetStatus() == roomv1.StatusClosing {
-		return true
+		return
 	}
 
 	isHost, err := room.IsHost(connected.Client)
@@ -223,17 +223,17 @@ func (p *StandardProtocol) Disconnect(connected *sessionv1.Session, room roomv1.
 			glog.Errorf("Failed to migrate host, %v", err)
 		}
 	}
-	return true
+	return
 }
 
 // List handles a client requesting a list of all clients connected to a room
-func (p *StandardProtocol) List(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
+func (p *StandardProtocol) List(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) {
 	if connected == nil || room == nil {
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to list a room's clients",
 		})
-		return false
+		return
 	}
 
 	connectedClients, err := room.GetConnected()
@@ -242,7 +242,7 @@ func (p *StandardProtocol) List(payload *transportv1.Payload, connected *session
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room's connected clients, %v", err),
 		})
-		return false
+		return
 	}
 
 	list := make([]*clientv1.SanitisedClient, 0)
@@ -254,7 +254,7 @@ func (p *StandardProtocol) List(payload *transportv1.Payload, connected *session
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 			})
-			return false
+			return
 		}
 		list = append(list, &clientv1.SanitisedClient{
 			ID:   connectedClient.Client.ID,
@@ -274,17 +274,17 @@ func (p *StandardProtocol) List(payload *transportv1.Payload, connected *session
 		Flag: transportv1.Payload_RESPONSE_LIST,
 		Data: responseData,
 	})
-	return false
+	return
 }
 
 // RelayMessage handles a client sending a message to the room
-func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
+func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) {
 	if connected == nil || room == nil {
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to relay a message",
 		})
-		return false
+		return
 	}
 
 	relayMsg := &relayv1.Relay{}
@@ -294,7 +294,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Relayed message does not conform to spec, %v", err),
 		})
-		return false
+		return
 	}
 
 	connectedClientList, err := room.GetConnected()
@@ -303,7 +303,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve room's connected clients, %v", err),
 		})
-		return false
+		return
 	}
 
 	isHost, err := room.IsHost(connected.Client)
@@ -312,7 +312,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 		})
-		return false
+		return
 	}
 
 	switch relayMsg.Type {
@@ -322,17 +322,17 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 				Code:    http.StatusBadRequest,
 				Message: "Must be host to broadcast",
 			})
-			return false
+			return
 		}
 		p.broadcast(payload, connected, room, connectedClientList)
-		return false
+		return
 	case relayv1.Relay_TARGET:
 		if !isHost {
 			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Must be host to send targeted messages",
 			})
-			return false
+			return
 		}
 
 		if relayMsg.Target == nil {
@@ -340,7 +340,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 				Code:    http.StatusBadRequest,
 				Message: "Must provide a target ID to send a message to",
 			})
-			return false
+			return
 		}
 
 		for _, connectedClient := range connectedClientList {
@@ -351,20 +351,20 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 				Flag: transportv1.Payload_RESPONSE_RELAY_MESSAGE,
 				Data: payload.Data,
 			})
-			return false
+			return
 		}
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("No target client found with ID %d", *relayMsg.Target),
 		})
-		return false
+		return
 	case relayv1.Relay_HOST:
 		if isHost {
 			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusBadRequest,
 				Message: "Hosts cannot send messages to themselves",
 			})
-			return false
+			return
 		}
 
 		host, err := room.GetHost()
@@ -373,7 +373,7 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to get host, %v", err),
 			})
-			return false
+			return
 		}
 
 		host.Write <- Succeed(&transportv1.Payload{
@@ -381,17 +381,17 @@ func (p *StandardProtocol) RelayMessage(payload *transportv1.Payload, connected 
 			Data: payload.Data,
 		})
 	}
-	return false
+	return
 }
 
 // GrantHost handles a client transferring the room's host powers to another client
-func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
+func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) {
 	if connected == nil || room == nil {
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to grant another client host",
 		})
-		return false
+		return
 	}
 
 	grantHostRequest := &roomspecv1.GrantHostRequest{}
@@ -401,7 +401,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid grant host request provided, does not conform to spec, %v", err),
 		})
-		return false
+		return
 	}
 
 	isHost, err := room.IsHost(connected.Client)
@@ -410,7 +410,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 		})
-		return false
+		return
 	}
 
 	if !isHost {
@@ -418,7 +418,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 			Code:    http.StatusBadRequest,
 			Message: "Must be host to grant host to another host",
 		})
-		return false
+		return
 	}
 
 	if grantHostRequest.HostID == connected.Client.ID {
@@ -426,7 +426,7 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 			Code:    http.StatusBadRequest,
 			Message: "Cannot transfer host powers to yourself",
 		})
-		return false
+		return
 	}
 
 	host, err := room.GetClient(grantHostRequest.HostID)
@@ -437,13 +437,13 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 				Code:    http.StatusBadRequest,
 				Message: v.Message,
 			})
-			return false
+			return
 		default:
 			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to get client with ID %d, %v", grantHostRequest.HostID, err),
 			})
-			return false
+			return
 		}
 	}
 
@@ -453,20 +453,20 @@ func (p *StandardProtocol) GrantHost(payload *transportv1.Payload, connected *se
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to change host, %v", err),
 		})
-		return false
+		return
 	}
 
-	return false
+	return
 }
 
 // Kick handles a client removing another client from the room
-func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) bool {
+func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *sessionv1.Session, room roomv1.Room) {
 	if connected == nil || room == nil {
 		connected.Write <- Fail(&transportv1.Error{
 			Code:    http.StatusBadRequest,
 			Message: "Must be connected to a room to kick a client",
 		})
-		return false
+		return
 	}
 
 	kickRequest := &roomspecv1.KickRequest{}
@@ -476,7 +476,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 			Code:    http.StatusBadRequest,
 			Message: fmt.Sprintf("Invalid kick request provided, does not conform to spec, %v", err),
 		})
-		return false
+		return
 	}
 
 	isHost, err := room.IsHost(connected.Client)
@@ -485,7 +485,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to determine if client is host, %v", err),
 		})
-		return false
+		return
 	}
 
 	if !isHost {
@@ -493,7 +493,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 			Code:    http.StatusBadRequest,
 			Message: "Must be host to kick",
 		})
-		return false
+		return
 	}
 
 	if kickRequest.ClientID == connected.Client.ID {
@@ -501,7 +501,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 			Code:    http.StatusBadRequest,
 			Message: "Cannot kick yourself",
 		})
-		return false
+		return
 	}
 
 	kickedClient, err := room.GetClient(kickRequest.ClientID)
@@ -512,13 +512,13 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 				Code:    http.StatusBadRequest,
 				Message: v.Message,
 			})
-			return false
+			return
 		default:
 			connected.Write <- Fail(&transportv1.Error{
 				Code:    http.StatusInternalServerError,
 				Message: fmt.Sprintf("Failed to kick client with ID %d, %v", kickRequest.ClientID, err),
 			})
-			return false
+			return
 		}
 	}
 
@@ -536,7 +536,7 @@ func (p *StandardProtocol) Kick(payload *transportv1.Payload, connected *session
 		Flag: transportv1.Payload_RESPONSE_KICK,
 		Data: kickData,
 	})
-	return false
+	return
 }
 
 // CloseRoom handles a room being closed and all clients disconnecting
@@ -558,6 +558,26 @@ func (p *StandardProtocol) CloseRoom(roomID int32) error {
 	}
 
 	return p.RoomManager.DeleteRoom(roomID)
+}
+
+// CreateRoom creates a new room
+func (p *StandardProtocol) CreateRoom(maxClients int32) (roomv1.Room, error) {
+	return p.RoomManager.CreateRoom(maxClients)
+}
+
+// GetRoom returns any matching room, if no room is found an error is returned
+func (p *StandardProtocol) GetRoom(roomID int32) (roomv1.Room, error) {
+	return p.RoomManager.GetRoom(roomID)
+}
+
+// Summary returns a summary of all rooms
+func (p *StandardProtocol) Summary() (*roomv1.Summary, error) {
+	return p.RoomManager.Summary()
+}
+
+// ListRooms returns a list of all rooms
+func (p *StandardProtocol) ListRooms() ([]roomv1.Room, error) {
+	return p.RoomManager.ListRooms()
 }
 
 func (p *StandardProtocol) setHostIfNone(connected *sessionv1.Session, room roomv1.Room) {
