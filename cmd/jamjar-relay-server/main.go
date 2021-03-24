@@ -83,8 +83,7 @@ func main() {
 			Protocol: protocol,
 		},
 		Rooms: &rooms.Handle{
-			RoomManager: roomManager,
-			Protocol:    protocol,
+			Protocol: protocol,
 		},
 	}
 	api.Routes()

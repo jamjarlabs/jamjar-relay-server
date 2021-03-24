@@ -24,24 +24,25 @@ import (
 
 // Protocol defines the contract that a v1 protocol should fufil, and the actions possible
 type Protocol interface {
-	// Definitions for client interactions, the boolean response determines if the connection should be stopped,
-	// true = break connection, false = keep connection
-
 	// Connect defines a client connecting to a room
-	Connect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room, bool)
+	Connect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room)
 	// Reconnect defines a client reconnecting to a room
-	Reconnect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room, bool)
+	Reconnect(payload *transport.Payload, connected *session.Session, currentRoom room.Room) (*session.Session, room.Room)
 	// Disconnect defines a client disconnecting from a room and closing the connection
-	Disconnect(connected *session.Session, room room.Room) bool
+	Disconnect(connected *session.Session, room room.Room)
 	// List defines a client requesting a list of all clients connected to a room
-	List(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	List(payload *transport.Payload, connected *session.Session, room room.Room)
 	// RelayMessage defines a client sending a message to the room
-	RelayMessage(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	RelayMessage(payload *transport.Payload, connected *session.Session, room room.Room)
 	// GrantHost defines a client transferring the room's host powers to another client
-	GrantHost(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	GrantHost(payload *transport.Payload, connected *session.Session, room room.Room)
 	// Kick defines a client removing another client from the room
-	Kick(payload *transport.Payload, connected *session.Session, room room.Room) bool
+	Kick(payload *transport.Payload, connected *session.Session, room room.Room)
 
 	// CloseRoom is a server based control for closing a room and disconnecting all clients
 	CloseRoom(roomID int32) error
+	CreateRoom(maxClients int32) (room.Room, error)
+	GetRoom(roomID int32) (room.Room, error)
+	Summary() (*room.Summary, error)
+	ListRooms() ([]room.Room, error)
 }
