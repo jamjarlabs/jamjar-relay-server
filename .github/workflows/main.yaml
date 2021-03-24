@@ -1,0 +1,78 @@
+name: main
+on:
+  push:
+  pull_request:
+  release:
+    types: [created]
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Set up Go 1.14.6
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.14.6
+      id: go
+    - name: Check out code into the Go module directory
+      uses: actions/checkout@v1
+    - name: Lint, test and build
+      run: |
+        # Get golint
+        export PATH=$PATH:$(go env GOPATH)/bin
+        GO111MODULE=off go get -u golang.org/x/lint/golint
+        # Lint, beautify and generate code
+        make lint
+        make generate
+        # Exit if there's any difference in the code after beautification + generation
+        git diff --exit-code
+        # Build
+        if [ ${{ github.event_name }} == "release" ]; then
+          # github.ref is in the form refs/tags/VERSION, so apply regex to just get version
+          VERSION=$(echo "${{ github.ref }}" | grep -P '([^\/]+$)' -o)
+        else
+          VERSION="0.0.0"
+        fi
+        make VERSION=${VERSION}
+        make all
+        make package_all
+    - name: Release
+      env:
+        DOCKER_USER: ${{ secrets.DOCKER_USER }}
+        DOCKER_PASS: ${{ secrets.DOCKER_PASS }}
+      if: github.event_name != 'pull_request' && github.repository == 'jamjarlabs/jamjar-relay-server'
+      run: |
+        echo "$DOCKER_PASS" | docker login --username=$DOCKER_USER --password-stdin
+        if [ ${{ github.event_name }} == "release" ]; then
+          # This needs to be determined again, due to env vars not being shared between steps
+          # https://github.com/actions/starter-workflows/issues/68
+          VERSION=$(echo "${{ github.ref }}" | grep -P '([^\/]+$)' -o)
+          docker tag jamjarlabs/jamjar-relay-server:${VERSION} jamjarlabs/jamjar-relay-server:latest
+          docker push jamjarlabs/jamjar-relay-server:${VERSION}
+          docker push jamjarlabs/jamjar-relay-server:latest
+          # Package binary
+          make package_all
+        else
+          docker push jamjarlabs/jamjar-relay-server:$(git rev-parse --short ${{ github.sha }})
+        fi
+    - name: Publish linux_amd64 binary
+      if: github.event_name == 'release'
+      uses: Shopify/upload-to-release@1.0.0
+      with:
+        name: linux_amd64.tar.gz
+        path: linux_amd64.tar.gz
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Publish mac_amd64 binary
+      if: github.event_name == 'release'
+      uses: Shopify/upload-to-release@1.0.0
+      with:
+        name: mac_amd64.tar.gz
+        path: mac_amd64.tar.gz
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Publish windows_amd64 binary
+      if: github.event_name == 'release'
+      uses: Shopify/upload-to-release@1.0.0
+      with:
+        name: windows_amd64.tar.gz
+        path: windows_amd64.tar.gz
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
