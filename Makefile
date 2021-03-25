@@ -11,6 +11,9 @@ default: vendor_modules
 all: linux_amd64 mac_amd64 windows_amd64
 
 package_all:
+	rm -f linux_amd64.tar.gz
+	rm -f mac_amd64.tar.gz
+	rm -f windows_amd64.tar.gz
 	tar -czvf linux_amd64.tar.gz dist/linux_amd64/*
 	tar -czvf mac_amd64.tar.gz dist/linux_amd64/*
 	tar -czvf windows_amd64.tar.gz dist/linux_amd64/*
@@ -41,6 +44,13 @@ lint: vendor_modules
 
 generate:
 	protoc -I=specs --go_out=paths=source_relative:./specs $(shell find specs/ -iname "*.proto")
+
+proto:
+	./hack/proto.sh
+
+package_proto: proto
+	rm -f protobuf.zip
+	zip -r protobuf.zip dist/protobuf/*
 
 vendor_modules:
 	go mod vendor

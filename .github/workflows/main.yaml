@@ -57,6 +57,8 @@ jobs:
           docker push jamjarlabs/jamjar-relay-server:latest
           # Package binary
           make package_all
+          # Package protobuf
+          make package_proto
         else
           docker push jamjarlabs/jamjar-relay-server:$(git rev-parse --short ${{ github.sha }})
         fi
@@ -80,4 +82,11 @@ jobs:
       with:
         name: windows_amd64.tar.gz
         path: windows_amd64.tar.gz
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Publish protobuf specs
+      if: github.event_name == 'release'
+      uses: Shopify/upload-to-release@1.0.0
+      with:
+        name: protobuf.zip
+        path: protobuf.zip
         repo-token: ${{ secrets.GITHUB_TOKEN }}
