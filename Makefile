@@ -50,7 +50,7 @@ proto:
 
 package_proto: proto
 	rm -f protobuf.zip
-	zip -r protobuf.zip dist/protobuf/*
+	cd dist/protobuf/ && zip -r ../../protobuf.zip *
 
 vendor_modules:
 	go mod vendor
