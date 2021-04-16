@@ -15,6 +15,6 @@ and all messages are forwarded, or 'relayed' to other clients through the server
 
 ### Commands
 
-- `make run` - Run the server locally on port `8000`.
+- `make run` - Run the server locally on port `5000`.
 - `make cli` - Run the test CLI for interacting with the local server.
 - `make generate` - Generates all the Go code from the protobuf specs.
