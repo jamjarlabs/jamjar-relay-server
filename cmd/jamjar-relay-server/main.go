@@ -23,9 +23,11 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi"
+	"github.com/go-chi/cors"
 	"github.com/golang/glog"
 	v1 "github.com/jamjarlabs/jamjar-relay-server/internal/api/v1"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/api/v1/rooms"
@@ -35,8 +37,9 @@ import (
 )
 
 const (
-	portEnv    = "PORT"
-	addressEnv = "ADDRESS"
+	portEnv        = "PORT"
+	addressEnv     = "ADDRESS"
+	corsOriginsEnv = "CORS_ORIGINS"
 )
 
 const (
@@ -57,6 +60,11 @@ func main() {
 		glog.Fatalf("Missing %s environment variable", addressEnv)
 	}
 
+	corsOrigins, exists := os.LookupEnv(corsOriginsEnv)
+	if !exists {
+		glog.Fatalf("Missing %s environment variable", corsOriginsEnv)
+	}
+
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		glog.Fatalf("Invalid %s variable provided, must be integer, %v", portEnv, err)
@@ -75,6 +83,14 @@ func main() {
 	}
 
 	router := chi.NewRouter()
+	router.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   strings.Split(corsOrigins, ";"),
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 
 	// Set up API
 	api := &v1.API{
