@@ -23,6 +23,7 @@ import (
 	"github.com/golang/glog"
 	roomv1 "github.com/jamjarlabs/jamjar-relay-server/internal/v1/room"
 	sessionv1 "github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
+	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/api"
 	clientv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 	relayv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/relay"
 	roomspecv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/room"
@@ -104,6 +105,8 @@ func (p *StandardProtocol) Connect(payload *transportv1.Payload, connected *sess
 		})
 
 		p.setHostIfNone(connected, matchRoom)
+
+		p.sendClientConnectToHost(connected, matchRoom)
 
 		return connected, matchRoom
 	}
@@ -188,6 +191,8 @@ func (p *StandardProtocol) Reconnect(payload *transportv1.Payload, connected *se
 			})
 
 			p.setHostIfNone(connected, matchRoom)
+
+			p.sendClientConnectToHost(connected, matchRoom)
 
 			return connected, matchRoom
 		}
@@ -571,7 +576,7 @@ func (p *StandardProtocol) GetRoom(roomID int32) (roomv1.Room, error) {
 }
 
 // Summary returns a summary of all rooms
-func (p *StandardProtocol) Summary() (*roomv1.Summary, error) {
+func (p *StandardProtocol) Summary() (*api.RoomsSummary, error) {
 	return p.RoomManager.Summary()
 }
 
@@ -587,19 +592,20 @@ func (p *StandardProtocol) setHostIfNone(connected *sessionv1.Session, room room
 			Code:    http.StatusInternalServerError,
 			Message: fmt.Sprintf("Failed to retrieve the current host, %v", err),
 		})
-	} else {
-		if host == nil {
-			_, err := room.SetHost(&connected.Client.ID)
-			if err != nil {
-				connected.Write <- Fail(&transportv1.Error{
-					Code:    http.StatusInternalServerError,
-					Message: fmt.Sprintf("Failed to update host, %v", err),
-				})
-			} else {
-				connected.Write <- Succeed(&transportv1.Payload{
-					Flag: transportv1.Payload_RESPONSE_ASSIGN_HOST,
-				})
-			}
+		return
+	}
+
+	if host == nil {
+		_, err := room.SetHost(&connected.Client.ID)
+		if err != nil {
+			connected.Write <- Fail(&transportv1.Error{
+				Code:    http.StatusInternalServerError,
+				Message: fmt.Sprintf("Failed to update host, %v", err),
+			})
+		} else {
+			connected.Write <- Succeed(&transportv1.Payload{
+				Flag: transportv1.Payload_RESPONSE_ASSIGN_HOST,
+			})
 		}
 	}
 }
@@ -672,4 +678,34 @@ func (p *StandardProtocol) changeHost(room roomv1.Room, host *sessionv1.Session)
 	}
 
 	return nil
+}
+
+func (p *StandardProtocol) sendClientConnectToHost(connected *sessionv1.Session, room roomv1.Room) {
+	host, err := room.GetHost()
+	if err != nil {
+		connected.Write <- Fail(&transportv1.Error{
+			Code:    http.StatusInternalServerError,
+			Message: fmt.Sprintf("Failed to retrieve the current host, %v", err),
+		})
+		return
+	}
+
+	if host == nil {
+		return
+	}
+
+	responseData, err := proto.Marshal(&clientv1.SanitisedClient{
+		ID:   connected.Client.ID,
+		Host: connected.Client.ID == host.Client.ID,
+	})
+	if err != nil {
+		// Should not occur, panic
+		panic(err)
+	}
+
+	host.Write <- Succeed(&transportv1.Payload{
+		Flag: transportv1.Payload_RESPONSE_CLIENT_CONNECT,
+		Data: responseData,
+	})
+	return
 }

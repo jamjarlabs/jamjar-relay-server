@@ -38,6 +38,7 @@ message Payload {
         RESPONSE_LIST = 11;
         RESPONSE_KICK = 12;
         RESPONSE_ERROR = 13;
+        RESPONSE_CLIENT_CONNECT = 14;
     }
 }
 

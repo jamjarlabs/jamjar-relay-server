@@ -206,7 +206,7 @@ func (h *Handle) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	infos := []*room.Info{}
+	infos := []*apispecv1.RoomInfo{}
 
 	for _, room := range rooms {
 		info, err := room.GetInfo()

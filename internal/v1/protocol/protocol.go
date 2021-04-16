@@ -19,6 +19,7 @@ package protocol
 import (
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/room"
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
+	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/api"
 	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/transport"
 )
 
@@ -43,6 +44,6 @@ type Protocol interface {
 	CloseRoom(roomID int32) error
 	CreateRoom(maxClients int32) (room.Room, error)
 	GetRoom(roomID int32) (room.Room, error)
-	Summary() (*room.Summary, error)
+	Summary() (*api.RoomsSummary, error)
 	ListRooms() ([]room.Room, error)
 }

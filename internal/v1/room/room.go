@@ -18,6 +18,7 @@ package room
 
 import (
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
+	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/api"
 	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 )
 
@@ -39,7 +40,7 @@ type Room interface {
 	IsHost(potentialHost *client.Client) (bool, error)
 	SetHost(hostID *int32) (*session.Session, error)
 	GetHost() (*session.Session, error)
-	GetInfo() (*Info, error)
+	GetInfo() (*api.RoomInfo, error)
 
 	SetStatus(Status)
 	GetStatus() Status
@@ -59,23 +60,6 @@ const (
 	StatusClosing
 )
 
-// Info defines useful information about a room that can be easily serialised
-type Info struct {
-	ID             int32  `json:"id"`
-	Secret         int32  `json:"secret"`
-	MaxClients     int32  `json:"max_clients"`
-	CurrentClients int32  `json:"current_clients"`
-	RoomStatus     string `json:"room_status"`
-}
-
-// Summary defines a grouped summary of multiple rooms, useful for seeing the overall state of the relay server
-type Summary struct {
-	NumberOfRooms    int32 `json:"number_of_rooms"`
-	MaxClients       int32 `json:"max_clients"`
-	CurrentClients   int32 `json:"current_clients"`
-	CommittedClients int32 `json:"committed_clients"`
-}
-
 // Manager defines a contract for managing rooms in a centralised space
 type Manager interface {
 	GetRoom(id int32) (Room, error)
@@ -84,5 +68,5 @@ type Manager interface {
 
 	ListRooms() ([]Room, error)
 
-	Summary() (*Summary, error)
+	Summary() (*api.RoomsSummary, error)
 }

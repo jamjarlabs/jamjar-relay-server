@@ -23,6 +23,7 @@ import (
 
 	"github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
 	sessionv1 "github.com/jamjarlabs/jamjar-relay-server/internal/v1/session"
+	"github.com/jamjarlabs/jamjar-relay-server/specs/v1/api"
 	clientv1 "github.com/jamjarlabs/jamjar-relay-server/specs/v1/client"
 )
 
@@ -71,7 +72,7 @@ func (m *MemoryManager) ListRooms() ([]Room, error) {
 }
 
 // Summary generates a rooms summary from all the rooms in the room manager
-func (m *MemoryManager) Summary() (*Summary, error) {
+func (m *MemoryManager) Summary() (*api.RoomsSummary, error) {
 	currentClients := int32(0)
 	committedClients := int32(0)
 	for _, room := range m.Rooms {
@@ -82,7 +83,7 @@ func (m *MemoryManager) Summary() (*Summary, error) {
 		currentClients += info.CurrentClients
 		committedClients += int32(math.Ceil(float64(info.MaxClients)/float64(m.CeilCommittedToNearest)) * float64(m.CeilCommittedToNearest))
 	}
-	return &Summary{
+	return &api.RoomsSummary{
 		NumberOfRooms:    int32(len(m.Rooms)),
 		MaxClients:       m.MaxClients,
 		CurrentClients:   currentClients,
@@ -187,8 +188,8 @@ func (r *MemoryRoom) RoomMatches(id int32, secret int32) bool {
 }
 
 // GetInfo generates the room's info
-func (r *MemoryRoom) GetInfo() (*Info, error) {
-	return &Info{
+func (r *MemoryRoom) GetInfo() (*api.RoomInfo, error) {
+	return &api.RoomInfo{
 		ID:             r.ID,
 		Secret:         r.Secret,
 		MaxClients:     r.MaxClients,

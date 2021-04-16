@@ -20,3 +20,20 @@ package api
 type RoomCreationRequest struct {
 	MaxClients int32 `json:"max_clients"`
 }
+
+// RoomInfo defines useful information about a room that can be easily serialised
+type RoomInfo struct {
+	ID             int32  `json:"id"`
+	Secret         int32  `json:"secret"`
+	MaxClients     int32  `json:"max_clients"`
+	CurrentClients int32  `json:"current_clients"`
+	RoomStatus     string `json:"room_status"`
+}
+
+// RoomsSummary defines a grouped summary of multiple rooms, useful for seeing the overall state of the relay server
+type RoomsSummary struct {
+	NumberOfRooms    int32 `json:"number_of_rooms"`
+	MaxClients       int32 `json:"max_clients"`
+	CurrentClients   int32 `json:"current_clients"`
+	CommittedClients int32 `json:"committed_clients"`
+}
