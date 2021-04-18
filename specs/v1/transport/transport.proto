@@ -39,6 +39,7 @@ message Payload {
         RESPONSE_KICK = 12;
         RESPONSE_ERROR = 13;
         RESPONSE_CLIENT_CONNECT = 14;
+        RESPONSE_CLIENT_DISCONNECT = 15;
     }
 }
 

@@ -228,7 +228,8 @@ func (p *StandardProtocol) Disconnect(connected *sessionv1.Session, room roomv1.
 			glog.Errorf("Failed to migrate host, %v", err)
 		}
 	}
-	return
+
+	p.sendClientDisconnectToHost(connected, room)
 }
 
 // List handles a client requesting a list of all clients connected to a room
@@ -588,25 +589,20 @@ func (p *StandardProtocol) ListRooms() ([]roomv1.Room, error) {
 func (p *StandardProtocol) setHostIfNone(connected *sessionv1.Session, room roomv1.Room) {
 	host, err := room.GetHost()
 	if err != nil {
-		connected.Write <- Fail(&transportv1.Error{
-			Code:    http.StatusInternalServerError,
-			Message: fmt.Sprintf("Failed to retrieve the current host, %v", err),
-		})
+		glog.Errorf("Failed to retrieve the current host, %v", err)
 		return
 	}
 
 	if host == nil {
 		_, err := room.SetHost(&connected.Client.ID)
 		if err != nil {
-			connected.Write <- Fail(&transportv1.Error{
-				Code:    http.StatusInternalServerError,
-				Message: fmt.Sprintf("Failed to update host, %v", err),
-			})
-		} else {
-			connected.Write <- Succeed(&transportv1.Payload{
-				Flag: transportv1.Payload_RESPONSE_ASSIGN_HOST,
-			})
+			glog.Errorf("Failed to update host, %v", err)
+			return
 		}
+
+		connected.Write <- Succeed(&transportv1.Payload{
+			Flag: transportv1.Payload_RESPONSE_ASSIGN_HOST,
+		})
 	}
 }
 
@@ -674,19 +670,17 @@ func (p *StandardProtocol) changeHost(room roomv1.Room, host *sessionv1.Session)
 	for _, connectedClient := range connectedClients {
 		connectedClient.Write <- Succeed(&transportv1.Payload{
 			Flag: transportv1.Payload_RESPONSE_FINISH_HOST_MIGRATE,
+			Data: finishMigrationBytes,
 		})
 	}
 
 	return nil
 }
 
-func (p *StandardProtocol) sendClientConnectToHost(connected *sessionv1.Session, room roomv1.Room) {
+func (p *StandardProtocol) sendClientConnectToHost(connecting *sessionv1.Session, room roomv1.Room) {
 	host, err := room.GetHost()
 	if err != nil {
-		connected.Write <- Fail(&transportv1.Error{
-			Code:    http.StatusInternalServerError,
-			Message: fmt.Sprintf("Failed to retrieve the current host, %v", err),
-		})
+		glog.Errorf("Failed to retrieve the current host, %v", err)
 		return
 	}
 
@@ -695,8 +689,8 @@ func (p *StandardProtocol) sendClientConnectToHost(connected *sessionv1.Session,
 	}
 
 	responseData, err := proto.Marshal(&clientv1.SanitisedClient{
-		ID:   connected.Client.ID,
-		Host: connected.Client.ID == host.Client.ID,
+		ID:   connecting.Client.ID,
+		Host: connecting.Client.ID == host.Client.ID,
 	})
 	if err != nil {
 		// Should not occur, panic
@@ -705,6 +699,33 @@ func (p *StandardProtocol) sendClientConnectToHost(connected *sessionv1.Session,
 
 	host.Write <- Succeed(&transportv1.Payload{
 		Flag: transportv1.Payload_RESPONSE_CLIENT_CONNECT,
+		Data: responseData,
+	})
+	return
+}
+
+func (p *StandardProtocol) sendClientDisconnectToHost(disconnecting *sessionv1.Session, room roomv1.Room) {
+	host, err := room.GetHost()
+	if err != nil {
+		glog.Errorf("Failed to retrieve the current host, %v", err)
+		return
+	}
+
+	if host == nil {
+		return
+	}
+
+	responseData, err := proto.Marshal(&clientv1.SanitisedClient{
+		ID:   disconnecting.Client.ID,
+		Host: disconnecting.Client.ID == host.Client.ID,
+	})
+	if err != nil {
+		// Should not occur, panic
+		panic(err)
+	}
+
+	host.Write <- Succeed(&transportv1.Payload{
+		Flag: transportv1.Payload_RESPONSE_CLIENT_DISCONNECT,
 		Data: responseData,
 	})
 	return
